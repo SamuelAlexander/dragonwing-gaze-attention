@@ -1,0 +1,6 @@
+detect_every,fps,speedup,mean_gaze_err_deg,p95_gaze_err_deg,max_gaze_err_deg,pct_over_10deg,frames_lost,mean_box_drift_px,frames,backend,source
+1,26.94,0.934,0.0,0.0,0.0,0.0,0,0.0,272,htp,face-closeup.mp4
+2,36.2,1.255,5.544,19.45,33.403,25.09,0,5.62,272,htp,face-closeup.mp4
+3,41.15,1.427,8.518,26.832,44.179,33.95,0,9.11,272,htp,face-closeup.mp4
+5,45.3,1.57,10.69,29.796,38.805,45.39,0,13.9,272,htp,face-closeup.mp4
+10,48.97,1.698,13.774,34.778,72.472,56.09,0,22.13,272,htp,face-closeup.mp4

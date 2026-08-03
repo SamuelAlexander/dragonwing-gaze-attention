@@ -1,0 +1,54 @@
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# internal working files, never published
+SHOTLIST.md
+NOTES.md
+HANDOFF.md
+AGENTS.md
+CLAUDE.md
+PLAN.md
+
+# intermediates: regenerable from the scripts, and large
+*.pt
+*.onnx
+
+# the MPIIGaze archive and its extraction: 2.1 GB, downloaded by the scripts
+test-data/mpiigaze/
+
+# Sam's raw camera footage and its transcodes. 2.6 GB, and three of them are over
+# GitHub's 100 MB per-file limit. The guide does not need them: readers point the
+# scripts at their own webcam or clip.
+test-data/*.mov
+test-data/sample02.mp4
+test-data/sample03.mp4
+
+# Working media that the published guide does not reference. The per-stage videos are
+# editing source, the cone 25/35 renders were how the 30 degree default got chosen, and
+# the rest are superseded stock-clip demos. results/sample03-cone30.mp4 IS committed as
+# the one demo video, matching how the previous guide in this series is sized.
+results/stages/
+results/sample03-cone25.mp4
+results/sample03-cone35.mp4
+results/sample02-final.mp4
+results/desk-worker-annotated.mp4
+results/looking-away.mp4
+results/attention-demo.mp4
+results/ui-test*.mp4
+results/probe.mp4
+results/hero-*.mp4
+results/calib*.json
+
+# raw export artifacts; the copies in models/ are what the guide uses
+models/_export/
+
+# scratch diagnostics from the build session
+results/debug/
+
+# the compiled .tflite files under models/ ARE committed, so a reader can clone
+# and run the demo without first waiting on an AI Hub account and cloud jobs
+
+# scratch diagnostics from the landmark-source comparison, not guide assets
+results/landmarks/

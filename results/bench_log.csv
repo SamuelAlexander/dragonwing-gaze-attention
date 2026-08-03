@@ -1,0 +1,16 @@
+model,config,median_ms,min_ms,max_ms,fps,runs,governor,image
+face_det_lite,cpu-1thread,79.858,79.761,79.938,12.52,50,performance,portrait-6471976.jpg
+face_det_lite,cpu-8thread,11.676,11.478,12.392,85.64,50,performance,portrait-6471976.jpg
+face_det_lite,npu-htp,7.309,6.716,8.575,136.82,50,performance,portrait-6471976.jpg
+facemap_3dmm,cpu-1thread,12.427,12.335,12.64,80.47,50,performance,portrait-6471976.jpg
+facemap_3dmm,cpu-8thread,2.374,2.287,3.0,421.18,50,performance,portrait-6471976.jpg
+facemap_3dmm,npu-htp,1.01,0.748,1.564,989.91,50,performance,portrait-6471976.jpg
+eyegaze,cpu-1thread,93.09,92.927,93.832,10.74,50,performance,portrait-6471976.jpg
+eyegaze,cpu-8thread,15.83,15.598,18.578,63.17,50,performance,portrait-6471976.jpg
+eyegaze,npu-htp,4.779,3.934,5.634,209.26,50,performance,portrait-6471976.jpg
+all-4-invokes,cpu-1thread,278.464,,,3.59,50,performance,portrait-6471976.jpg
+all-4-invokes,cpu-8thread,45.711,,,21.88,50,performance,portrait-6471976.jpg
+all-4-invokes,npu-htp,17.876,,,55.94,50,performance,portrait-6471976.jpg
+full-pipeline,cpu-1thread,288.059,287.756,288.49,3.47,25,performance,portrait-6471976.jpg
+full-pipeline,cpu-8thread,54.598,53.881,56.131,18.32,25,performance,portrait-6471976.jpg
+full-pipeline,npu-htp,25.024,23.99,26.255,39.96,25,performance,portrait-6471976.jpg

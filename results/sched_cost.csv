@@ -1,0 +1,6 @@
+detect_every,fps,speedup,mean_gaze_err_deg,p95_gaze_err_deg,max_gaze_err_deg,pct_over_10deg,frames_lost,mean_box_drift_px,frames,backend,source
+1,26.46,1.008,0.0,0.0,0.0,0.0,0,0.0,1200,htp,sample03.mp4
+2,35.92,1.368,0.916,4.761,23.872,1.08,0,1.52,1200,htp,sample03.mp4
+3,40.18,1.531,1.366,6.173,25.754,1.75,0,2.64,1200,htp,sample03.mp4
+5,44.84,1.708,1.846,7.789,27.543,3.33,0,4.56,1200,htp,sample03.mp4
+10,49.38,1.881,2.938,12.427,75.246,7.08,0,8.44,1200,htp,sample03.mp4
