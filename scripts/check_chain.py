@@ -23,7 +23,7 @@ from gaze_common import (  # noqa: E402
     detect_faces,
     eye_patch,
     face_input,
-    fuse,
+    gaze_vector,
     gaze_input,
     gaze_output,
     pitchyaw_to_vector,
@@ -80,7 +80,7 @@ def run_chain(frame, det, mesh_m, gaze_m, mesh, verbose=True):
             continue
         g = gaze_output(gaze_m.run(gaze_input(patch)), flipped=flip)
         gazes[side] = g
-        vecs[side] = fuse(pose, g)
+        vecs[side] = gaze_vector(g)
         if verbose:
             eye_only = pitchyaw_to_vector(g[0], g[1])
             print(f"  {side:5s} eye : centre ({centre[0]:.0f},{centre[1]:.0f})  "

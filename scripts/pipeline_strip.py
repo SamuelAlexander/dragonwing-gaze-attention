@@ -26,7 +26,7 @@ PANELS = [
     ("stage1-detect", "1", "find the face", "face_det_lite"),
     ("stage2-landmarks", "2", "landmarks and head pose", "facemap_3dmm"),
     ("stage3-eye-patches", "3", "warp the eye patches", "eyegaze input"),
-    ("stage4-gaze", "4", "compose one direction", "eyegaze output"),
+    ("stage4-gaze", "4", "average the two eyes", "eyegaze output"),
 ]
 
 W, H = 1720, 1180

@@ -26,11 +26,12 @@ test-data/sample02.mp4
 test-data/sample03.mp4
 
 # Working media that the published guide does not reference. The per-stage videos are
-# editing source, the cone 25/35 renders were how the 30 degree default got chosen, and
-# the rest are superseded stock-clip demos. results/sample03-cone30.mp4 IS committed as
-# the one demo video, matching how the previous guide in this series is sized.
+# editing source, the cone renders predate the two-cue design (2026-11-23), and the rest
+# are superseded stock-clip demos. results/sample03-attention.mp4 IS committed as the one
+# demo video, and results/hero-pipeline.mp4 as the four stages together.
 results/stages/
 results/sample03-cone25.mp4
+results/sample03-cone30.mp4
 results/sample03-cone35.mp4
 results/sample02-final.mp4
 results/desk-worker-annotated.mp4
@@ -39,6 +40,8 @@ results/attention-demo.mp4
 results/ui-test*.mp4
 results/probe.mp4
 results/hero-*.mp4
+!results/hero-pipeline.mp4
+results/eye-gaze-pipeline.mp4
 results/calib*.json
 
 # raw export artifacts; the copies in models/ are what the guide uses

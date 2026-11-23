@@ -1,4 +1,4 @@
-"""Shared pieces for the gaze pipeline: model loading, decoding, and fusion.
+"""Shared pieces for the gaze pipeline: model loading, decoding, and gaze direction.
 
 Three models run per frame:
 
@@ -407,7 +407,7 @@ def project_point(p3, focal, principal):
 
 
 # ---------------------------------------------------------------------------
-# fusion: head pose + eye gaze -> one direction in camera space
+# gaze: EyeGaze output -> one direction in camera space
 # ---------------------------------------------------------------------------
 
 
@@ -422,43 +422,40 @@ def pitchyaw_to_vector(pitch, yaw):
     )
 
 
-def rotation_from_pose(pitch, yaw, roll):
-    """Head rotation matrix from the 3DMM's pose angles, same order as the mesh decode."""
+def head_rotation(head_pose):
+    """The head's rotation in camera space, built exactly as FaceMesh.decode3d builds it.
+
+    Model space is y-up with the face toward +z; the flip in the middle carries it into
+    camera space (x right, y down, z into the scene). These are the same matrices that
+    place the 68 landmarks, so anything drawn or measured with this turns the way the
+    landmarks do. Build it any other way and the pitch sign is easy to get backwards.
+    """
+    pitch, yaw, roll = (float(v) for v in head_pose)
+    flip = np.diag([1.0, -1.0, -1.0])
     cr, sr = np.cos(-roll), np.sin(-roll)
-    roll_m = np.array([[cr, -sr, 0], [sr, cr, 0], [0, 0, 1]], dtype=np.float32)
+    roll_m = np.array([[cr, -sr, 0], [sr, cr, 0], [0, 0, 1]])
     cy_, sy_ = np.cos(-yaw), np.sin(-yaw)
-    yaw_m = np.array([[cy_, 0, sy_], [0, 1, 0], [-sy_, 0, cy_]], dtype=np.float32)
+    yaw_m = np.array([[cy_, 0, sy_], [0, 1, 0], [-sy_, 0, cy_]])
     cp, sp = np.cos(-pitch), np.sin(-pitch)
-    pitch_m = np.array([[1, 0, 0], [0, cp, -sp], [0, sp, cp]], dtype=np.float32)
-    return yaw_m @ (pitch_m @ roll_m)
+    pitch_m = np.array([[1, 0, 0], [0, cp, -sp], [0, sp, cp]])
+    return yaw_m @ (pitch_m @ (flip @ roll_m))
 
 
-# The mesh decode maps its model space (y up, z back) into image space with this flip.
-# The head rotation is built in model space, so to apply it to a vector that is already
-# in camera convention it has to be conjugated by the same flip.
-P_FLIP = np.diag([1.0, -1.0, -1.0]).astype(np.float32)
+def head_forward(head_pose):
+    """Unit vector the face points along, camera space. Facing the lens is (0, 0, -1)."""
+    return (head_rotation(head_pose) @ np.array([0.0, 0.0, 1.0])).astype(np.float32)
 
 
-def head_rotation_camera(head_pose):
-    """Head rotation expressed in camera coordinates, ready to apply to a gaze vector.
+def gaze_vector(eye_gaze):
+    """EyeGaze's (pitch, yaw) -> unit direction in camera space. No head pose needed.
 
-    Getting this wrong is easy and quiet. Measured against MPIIGaze ground truth over
-    800 eyes (scripts/check_fusion.py), applying the raw model-space rotation makes the
-    fused direction 2.19 deg WORSE than ignoring head pose altogether; this form is
-    0.68 deg better. Both differences are significant. Do not "simplify" this.
+    EyeGaze's output is already camera-relative: the eye patch shows the eye as the
+    camera sees it, head turn included. Rotating it by head pose counts the head twice.
+    Measured on MPIIGaze with the dataset's own ground-truth head pose
+    (scripts/check_fusion.py): eye-only 15.5 deg mean error, composed with that perfect
+    head pose 23.4 deg, and 32.5 deg on the quarter of frames with the most head turn.
     """
-    R = rotation_from_pose(*head_pose)
-    return (P_FLIP @ R @ P_FLIP).T
-
-
-def fuse(head_pose, eye_gaze):
-    """Compose head orientation with eye-relative gaze into a camera-space direction.
-
-    EyeGaze reports where the eye points relative to the head. Where the person is
-    actually looking is that direction carried through the head's own rotation.
-    """
-    g_head = pitchyaw_to_vector(eye_gaze[0], eye_gaze[1])
-    v = head_rotation_camera(head_pose) @ g_head
+    v = pitchyaw_to_vector(eye_gaze[0], eye_gaze[1])
     n = np.linalg.norm(v)
     return v / n if n > 1e-6 else v
 

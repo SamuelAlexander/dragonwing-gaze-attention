@@ -31,7 +31,7 @@ from gaze_common import (  # noqa: E402
     detect_faces,
     eye_patch,
     face_input,
-    fuse,
+    gaze_vector,
     gaze_input,
     gaze_output,
     to_gray,
@@ -93,7 +93,7 @@ def main():
                                     ("left", LEFT_EYE_CORNERS, False)):
             p, _, _ = eye_patch(gray, lmk, corners, flip=flip)
             if p is not None:
-                vecs[side] = fuse(pose, gaze_output(gm.run(gaze_input(p)), flipped=flip))
+                vecs[side] = gaze_vector(gaze_output(gm.run(gaze_input(p)), flipped=flip))
         sep = float(np.linalg.norm(lmk[LEFT_EYE_IDX].mean(0) - lmk[RIGHT_EYE_IDX].mean(0)))
         variants["mesh68"] = (vecs, sep)
 
@@ -107,9 +107,8 @@ def main():
                                     ("left", DET5_LEFT_EYE, False)):
                 p, _, _ = patch_from_centre(gray, l5[idx], eye_w, flip)
                 if p is not None:
-                    vecs5[side] = fuse(
-                        pose, gaze_output(gm.run(gaze_input(p)), flipped=flip)
-                    )
+                    vecs5[side] = gaze_vector(
+                        gaze_output(gm.run(gaze_input(p)), flipped=flip))
             variants["det5"] = (vecs5, sep5)
 
         for name, (vv, s) in variants.items():

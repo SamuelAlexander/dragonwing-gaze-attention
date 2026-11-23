@@ -29,7 +29,7 @@ from gaze_common import (  # noqa: E402
     detect_faces,
     eye_patch,
     face_input,
-    fuse,
+    gaze_vector,
     gaze_input,
     gaze_output,
     to_gray,
@@ -146,7 +146,7 @@ def main():
             for corners, flip in ((RIGHT_EYE_CORNERS, True), (LEFT_EYE_CORNERS, False)):
                 p, _, _ = eye_patch(g, lm, corners, flip=flip)
                 if p is not None:
-                    fuse(ps, gaze_output(gm.run(gaze_input(p)), flipped=flip))
+                    gaze_vector(gaze_output(gm.run(gaze_input(p)), flipped=flip))
 
         for _ in range(3):
             one_frame()

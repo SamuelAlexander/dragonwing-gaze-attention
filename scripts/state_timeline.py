@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from attention import AttentionState, GazePipeline, calibrate  # noqa: E402
+from attention import CONE_DEG, HEAD_LIMIT_DEG, GazePipeline, calibrate, make_state  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MARK = {"ON": ".", "OFF": "o", "ALERT": "X", "NOFACE": "?"}
@@ -27,10 +27,13 @@ def main():
     ap.add_argument("--source", required=True)
     ap.add_argument("--models", default=os.path.join(ROOT, "models"))
     ap.add_argument("--backend", default="htp")
-    ap.add_argument("--cone", type=float, default=30.0)
+    ap.add_argument("--cone", type=float, default=CONE_DEG)
+    ap.add_argument("--head-limit", type=float, default=HEAD_LIMIT_DEG)
     ap.add_argument("--alert-after", type=float, default=2.0)
     ap.add_argument("--calib-seconds", type=float, default=4.0)
     ap.add_argument("--bucket", type=float, default=0.5, help="seconds per character")
+    ap.add_argument("--csv", default=None,
+                    help="also write per-frame gaze and head angles off their axes")
     args = ap.parse_args()
 
     backend = None if args.backend == "cpu" else args.backend
@@ -45,16 +48,19 @@ def main():
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     pipe._frame_i, pipe._last_box = 0, None
 
-    st = AttentionState(calib["axis"], cone_deg=args.cone, alert_after=args.alert_after)
-    states, angles, i = [], [], 0
+    st = make_state(calib, args)
+    states, angles, heads, i = [], [], [], 0
     while True:
         ok, frame = cap.read()
         if not ok:
             break
         res = pipe(frame)
-        s, a = st.update(res["direction"] if res else None, i / fps)
+        s, a = st.update(res["direction"] if res else None, i / fps,
+                         res["head"] if res else None)
         states.append(s if res else "NOFACE")
         angles.append(a if a is not None else float("nan"))
+        heads.append(st.last_head_angle if res and st.last_head_angle is not None
+                     else float("nan"))
         i += 1
     cap.release()
 
@@ -85,6 +91,13 @@ def main():
         c = states.count(key)
         print(f"  {key:<7}{c:5d} frames  {100 * c / len(states):5.1f}%")
     print(f"  face found in {100 * valid.mean():.1f}% of frames")
+
+    if args.csv:
+        with open(args.csv, "w") as f:
+            f.write("t,state,gaze_deg,head_deg\n")
+            for k, (s, a, h) in enumerate(zip(states, angles, heads)):
+                f.write(f"{k / fps:.3f},{s},{a:.2f},{h:.2f}\n")
+        print(f"wrote {args.csv}")
 
 
 if __name__ == "__main__":

@@ -39,7 +39,7 @@ from gaze_common import (  # noqa: E402
     eye_landmarks_to_frame,
     eye_patch,
     face_input,
-    fuse,
+    gaze_vector,
     gaze_input,
     gaze_output,
     iris_circle,
@@ -58,7 +58,7 @@ STAGES = [
      "Warp each eye into the model's canonical frame. The right eye is mirrored.",
      "96x160 grayscale in"),
     ("stage4-gaze", 4, "eyegaze output",
-     "Per-eye gaze, then both composed with head pose into one direction.",
+     "Per-eye gaze, then the two eyes averaged into one direction.",
      "2.58M parameters, 4.78 ms per eye"),
 ]
 
@@ -158,7 +158,7 @@ def render(cap, writers, det, mm, gm, mesh, limit=0, total=0):
             patch, centre, inv = eye_patch(gray, lmk, corners, flip=flip)
             out = gm.run(gaze_input(patch))
             g = gaze_output(out, flipped=flip)
-            v = fuse(pose, g)
+            v = gaze_vector(g)
             vecs.append(v)
             ic, ir = iris_circle(eye_landmarks_to_frame(out, inv, flip))
             if ic is None:
@@ -193,12 +193,13 @@ def render(cap, writers, det, mm, gm, mesh, limit=0, total=0):
         gaze_panel = R.readout(
             [("right eye", f"{np.degrees(eyes[0][3][0]):+.1f} / {np.degrees(eyes[0][3][1]):+.1f}"),
              ("left eye", f"{np.degrees(eyes[1][3][0]):+.1f} / {np.degrees(eyes[1][3][1]):+.1f}"),
-             ("composed", f"{np.degrees(np.arctan2(mean_v[0], -mean_v[2])):+.1f} yaw")],
+             ("both eyes", f"{np.degrees(np.arcsin(mean_v[1])):+.1f} / "
+                           f"{np.degrees(np.arctan2(-mean_v[0], -mean_v[2])):+.1f}")],
             520, 190)
         name, no, model, what, note = STAGES[3]
         img, rect = R.card(no, model, what, note)
         R.place(img, rect, [(g_vis, "blue and green: one estimate per eye",
-                             "white: their mean, carried through the head's rotation"),
+                             "white: their mean, the direction the app uses"),
                             (gaze_panel, "pitch / yaw, degrees", None, 1.0)],
               weights=[5, 2])
         writers[name].write(img)

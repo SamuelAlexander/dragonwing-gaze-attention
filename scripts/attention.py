@@ -1,8 +1,9 @@
 """Attention monitor: is the operator still looking at the thing they should be?
 
-Runs the three-model chain on every frame, fuses head pose with eye gaze, and compares
-the result against an on-task direction learned during a short calibration. Leaving the
-cone starts a dwell timer; staying out past the threshold raises an alert.
+Runs the three-model chain on every frame, averages the two eyes' gaze into one direction
+in camera space, and compares it against an on-task direction learned during a short
+calibration. Leaving the cone starts a dwell timer; staying out past the threshold raises
+an alert.
 
     # calibrate against wherever the camera is pointed, then watch
     python scripts/attention.py --source 0 --display --calibrate
@@ -42,7 +43,8 @@ from gaze_common import (  # noqa: E402
     eye_landmarks_to_frame,
     eye_patch,
     face_input,
-    fuse,
+    gaze_vector,
+    head_forward,
     gaze_input,
     gaze_output,
     iris_circle,
@@ -50,6 +52,11 @@ from gaze_common import (  # noqa: E402
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Tuned on sample03 (scripts/state_timeline.py). On task the calibrated gaze stays within
+# about 15 deg and the head within 5; every staged look-away crosses at least one.
+CONE_DEG = 20.0
+HEAD_LIMIT_DEG = 15.0
 
 GREEN = (80, 220, 100)
 AMBER = (40, 190, 245)
@@ -124,6 +131,26 @@ class GazePipeline:
         self._frame_i = 0
         self._last_box = None
         self.timings = {}
+        self._to_reference = np.eye(3)
+
+    def set_reference(self, axis):
+        """Draw arrows relative to the calibrated axis instead of the camera's.
+
+        The camera usually sits above the screen, so someone reading the screen looks
+        about 20 degrees below the lens and a camera-relative arrow points down the whole
+        time they are on task. Rotating the calibrated axis onto the camera axis makes the
+        arrow shrink to nothing at the on-task centre and grow as the gaze leaves it.
+        Drawing only: the state machine measures angles itself.
+        """
+        a = np.asarray(axis, dtype=np.float64)
+        a = a / np.linalg.norm(a)
+        b = np.array([0.0, 0.0, -1.0])
+        v, c = np.cross(a, b), float(a @ b)
+        if np.linalg.norm(v) < 1e-9:
+            self._to_reference = np.eye(3)
+            return
+        k = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+        self._to_reference = np.eye(3) + k + k @ k / (1.0 + c)
 
     def __call__(self, frame):
         h, w = frame.shape[:2]
@@ -165,7 +192,7 @@ class GazePipeline:
                 continue
             out = self.gaze_m.run(gaze_input(patch))
             g = gaze_output(out, flipped=flip)
-            v = fuse(pose, g)
+            v = gaze_vector(g)
             vecs.append(v)
 
             # iris from the model's own landmarks, falling back to the mesh corners
@@ -207,7 +234,7 @@ class GazePipeline:
         # rather than as honest noise. The per-eye values are still returned.
         # One displacement for both eyes, from the averaged direction. Its length is
         # the projection of a unit vector onto the image plane, i.e. sin(off-axis
-        # angle): zero looking straight at the lens, growing as the gaze turns away.
+        # angle): zero looking along the calibrated axis, growing as the gaze leaves it.
         arrow_delta = None
         if len(eyes) == 2:
             inter = float(np.linalg.norm(eyes[0]["iris_centre"]
@@ -218,8 +245,8 @@ class GazePipeline:
         else:
             inter = 0.0
         if inter > 0:
-            arrow_delta = (np.array([mean_v[0], mean_v[1]], dtype=np.float64)
-                           * self.arrow_scale * inter)
+            rel = self._to_reference @ mean_v.astype(np.float64)
+            arrow_delta = rel[:2] * self.arrow_scale * inter
 
         # how nearly the gaze points down the camera axis, 0 at 45 deg, 1 head-on
         toward = float(np.clip((-mean_v[2] - 0.707) / (1.0 - 0.707), 0.0, 1.0))
@@ -230,6 +257,7 @@ class GazePipeline:
             "landmarks": lmk,
             "pose": pose,
             "direction": mean_v,
+            "head": head_forward(pose),
             "per_eye": vecs,
             "eyes": eyes,
             "eye_centres": [tuple(e["iris_centre"]) for e in eyes],
@@ -244,9 +272,16 @@ class GazePipeline:
 
 
 class AttentionState:
-    """Cone test plus a dwell timer, hardened against a noisy gaze signal.
+    """Two cues, a dwell timer, and the hardening a noisy signal needs.
 
-    Three things matter here, and the first two were bugs before they were features:
+    **Off task means the gaze left its cone OR the head turned past its limit.** EyeGaze
+    alone under-reads big looks away: its output is compressed (about half the true angle
+    on MPIIGaze) and it barely moves when the eyes look down at a phone, half hidden by
+    the lids. Head pose is the cue a person cannot hide when they really turn away. Each
+    covers the other's blind spot: the head catches the phone in the lap, the gaze catches
+    eyes drifting off the screen while the head stays still.
+
+    Three more things matter, and the first two were bugs before they were features:
 
     - **Smooth the direction, not just the state.** A model with 17 degrees of error
       crosses a cone boundary constantly. An exponential moving average over the
@@ -261,9 +296,16 @@ class AttentionState:
     """
 
     def __init__(self, axis, cone_deg=25.0, alert_after=2.0, grace=0.3,
-                 smoothing=0.35, clear_frames=3, exit_margin=5.0):
+                 smoothing=0.35, clear_frames=3, exit_margin=5.0,
+                 head_axis=None, head_limit_deg=15.0):
         self.axis = np.asarray(axis, dtype=np.float32)
         self.cone_deg = cone_deg
+        # no calibrated head axis (an old calib.json) means the gaze cue works alone
+        self.head_axis = (None if head_axis is None
+                          else np.asarray(head_axis, dtype=np.float32))
+        self.head_limit_deg = head_limit_deg
+        self.last_head_angle = None
+        self._smoothed_head = None
         self.alert_after = alert_after
         self.grace = grace
         self.smoothing = smoothing
@@ -276,27 +318,32 @@ class AttentionState:
         self._smoothed = None
         self._inside_run = 0
 
-    def update(self, direction, now):
+    def _smooth(self, prev, d):
+        if prev is None:
+            return d
+        v = (1 - self.smoothing) * prev + self.smoothing * d
+        n = np.linalg.norm(v)
+        return v / n if n > 1e-6 else v
+
+    def update(self, direction, now, head=None):
         if direction is None:
             # a lost face is not evidence of attention; hold the timer running
             angle = None
             self._inside_run = 0
             inside = False
         else:
-            d = np.asarray(direction, dtype=np.float32)
-            if self._smoothed is None:
-                self._smoothed = d
-            else:
-                self._smoothed = (1 - self.smoothing) * self._smoothed + self.smoothing * d
-                n = np.linalg.norm(self._smoothed)
-                if n > 1e-6:
-                    self._smoothed = self._smoothed / n
+            self._smoothed = self._smooth(self._smoothed,
+                                          np.asarray(direction, dtype=np.float32))
             angle = angle_between(self._smoothed, self.axis)
             self.last_angle = angle
-            # asymmetric threshold: harder to re-enter than to leave
-            threshold = (self.cone_deg if self.off_since is None
-                         else self.cone_deg - self.exit_margin)
-            inside = angle <= threshold
+            # asymmetric thresholds: harder to re-enter than to leave
+            margin = 0.0 if self.off_since is None else self.exit_margin
+            inside = angle <= self.cone_deg - margin
+            if self.head_axis is not None and head is not None:
+                self._smoothed_head = self._smooth(self._smoothed_head,
+                                                   np.asarray(head, dtype=np.float32))
+                self.last_head_angle = angle_between(self._smoothed_head, self.head_axis)
+                inside = inside and self.last_head_angle <= self.head_limit_deg - margin
             self._inside_run = self._inside_run + 1 if inside else 0
 
         if inside and self._inside_run >= self.clear_frames:
@@ -361,7 +408,7 @@ def wait_for_key(cap, pipe, display, window, key="c"):
 def calibrate(cap, pipe, seconds=3.0, display=False, window="attention"):
     """Collect a mean gaze direction while the subject looks at the target."""
     print(f"calibration: look at the thing you want monitored for {seconds:.0f} seconds")
-    samples, t0 = [], time.time()
+    samples, heads, t0 = [], [], time.time()
     while time.time() - t0 < seconds:
         ok, frame = cap.read()
         if not ok:
@@ -370,6 +417,7 @@ def calibrate(cap, pipe, seconds=3.0, display=False, window="attention"):
         remaining = seconds - (time.time() - t0)
         if res is not None:
             samples.append(res["direction"])
+            heads.append(res["head"])
         if display:
             vis = frame.copy()
             cv2.putText(vis, f"CALIBRATING  look at the target  {remaining:.1f}s",
@@ -387,7 +435,17 @@ def calibrate(cap, pipe, seconds=3.0, display=False, window="attention"):
     axis = np.mean(samples, axis=0)
     axis = axis / np.linalg.norm(axis)
     spread = float(np.mean([angle_between(s, axis) for s in samples]))
-    return {"axis": axis.tolist(), "spread_deg": spread, "samples": len(samples)}, len(samples)
+    head_axis = np.mean(heads, axis=0)
+    head_axis = head_axis / np.linalg.norm(head_axis)
+    return {"axis": axis.tolist(), "head_axis": head_axis.tolist(),
+            "spread_deg": spread, "samples": len(samples)}, len(samples)
+
+
+def make_state(calib, args):
+    """The state machine for a calibration and the command-line thresholds."""
+    return AttentionState(calib["axis"], cone_deg=args.cone, alert_after=args.alert_after,
+                          head_axis=calib.get("head_axis"),
+                          head_limit_deg=args.head_limit)
 
 
 # ---------------------------------------------------------------------------
@@ -466,13 +524,13 @@ def draw(frame, res, state, angle, st, fps, timings, cone_deg):
     col_x = int(20 * s) + tw + int(48 * s)
     if angle is None:
         txt = "no face"
-    elif st.off_since is None:
-        txt = f"{angle:5.1f} deg off axis  (cone {cone_deg:.0f})"
     else:
-        # while off task the threshold to get back in is tighter, so show that number
-        # rather than the nominal cone, which otherwise looks like a contradiction
-        txt = (f"{angle:5.1f} deg off axis  "
-               f"(back on below {cone_deg - st.exit_margin:.0f})")
+        # while off task the thresholds to get back in are tighter, so show those
+        # rather than the nominal ones, which otherwise looks like a contradiction
+        m = 0.0 if st.off_since is None else st.exit_margin
+        txt = f"gaze {angle:4.0f} / {cone_deg - m:.0f} deg"
+        if st.last_head_angle is not None:
+            txt += f"   head {st.last_head_angle:4.0f} / {st.head_limit_deg - m:.0f} deg"
     cv2.putText(vis, txt, (col_x, int(40 * s)),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.72 * s, WHITE, max(1, int(2 * s)))
 
@@ -504,9 +562,11 @@ def main():
     ap.add_argument("--backend", default="htp", help="htp for NPU, 'cpu' for CPU")
     ap.add_argument("--display", action="store_true")
     ap.add_argument("-o", "--out", default=None, help="write an annotated mp4")
-    ap.add_argument("--cone", type=float, default=30.0,
-                    help="on-task half-angle in degrees. 30 covers a typical monitor "
-                         "at desk distance; measured on sample03")
+    ap.add_argument("--cone", type=float, default=CONE_DEG,
+                    help="gaze cone half-angle in degrees, around the calibrated "
+                         "direction; tuned on sample03")
+    ap.add_argument("--head-limit", type=float, default=HEAD_LIMIT_DEG,
+                    help="how far the head may turn from its calibrated pose, degrees")
     ap.add_argument("--alert-after", type=float, default=2.0)
     ap.add_argument("--detect-every", type=int, default=1)
     ap.add_argument("--calibrate", action="store_true")
@@ -569,7 +629,8 @@ def main():
         calib = {"axis": [0.0, 0.0, -1.0], "spread_deg": 0.0, "samples": 0}
         print("no calibration: assuming the target is straight at the camera")
 
-    st = AttentionState(calib["axis"], cone_deg=args.cone, alert_after=args.alert_after)
+    st = make_state(calib, args)
+    pipe.set_reference(calib["axis"])
     beeper = Beeper(enabled=not args.no_audio)
 
     writer = None
@@ -594,7 +655,8 @@ def main():
                 break
             res = pipe(frame)
             now = time.time() if is_live else i / media_fps
-            state, angle = st.update(res["direction"] if res else None, now)
+            state, angle = st.update(res["direction"] if res else None, now,
+                                     res["head"] if res else None)
             if state == "ALERT":
                 beeper.maybe_beep()
                 alerts += 1
@@ -624,8 +686,8 @@ def main():
                                              args.display, window)
                     if new_calib is not None:
                         calib = new_calib
-                        st = AttentionState(calib["axis"], cone_deg=args.cone,
-                                            alert_after=args.alert_after)
+                        st = make_state(calib, args)
+                        pipe.set_reference(calib["axis"])
                         with open(args.save_calib, "w") as f:
                             json.dump(calib, f, indent=2)
                         print(f"recalibrated: spread {calib['spread_deg']:.1f} deg")

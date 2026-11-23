@@ -5,7 +5,7 @@ but that was paired with dlib's 5-point landmarks. Our corners come from a 3DMM 
 which may sit differently, so the right factor is an empirical question.
 
 Two metrics, neither perfect on its own:
-  agreement  - angle between the two eyes' fused directions. Cheap, but a degenerate
+  agreement  - angle between the two eyes' gaze directions. Cheap, but a degenerate
                crop that always returns the same answer would score perfectly.
   on-camera  - for subjects who are looking into the lens, the angle away from straight
                ahead. Only meaningful for images tagged as such.
@@ -30,7 +30,7 @@ from gaze_common import (  # noqa: E402
     detect_faces,
     eye_patch,
     face_input,
-    fuse,
+    gaze_vector,
     gaze_input,
     gaze_output,
     to_gray,
@@ -92,9 +92,8 @@ def main():
                                         ("left", LEFT_EYE_CORNERS, False)):
                 p, _, _ = eye_patch(gray, lmk, corners, flip=flip)
                 if p is not None:
-                    vecs[side] = fuse(
-                        pose, gaze_output(gm.run(gaze_input(p)), flipped=flip)
-                    )
+                    vecs[side] = gaze_vector(
+                        gaze_output(gm.run(gaze_input(p)), flipped=flip))
             if len(vecs) == 2:
                 agrees.append(angle_between(vecs["left"], vecs["right"]))
                 if tag in LOOKING_AT_CAMERA:
