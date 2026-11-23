@@ -472,32 +472,35 @@ Every number in this guide came from a run on the board. The raw data and demo v
 ## Project structure
 
 ```
-models/                  the three .tflite files, plus the 3DMM basis arrays
+models/                 .tflite files and 3DMM basis arrays
+results/                measurements and demo videos
 scripts/
-  gaze_common.py         models, decoding, eye patches, gaze and head directions
-  attention.py           the application
-  run_live.sh            launch it on the board's own monitor, for filming
-  stop_live.sh           stop it cleanly, so the recording stays playable
-  fetch_3dmm_basis.py    download the landmark model's basis arrays
-  inspect_models.py      input and output tensors of each model
-  check_chain.py         run the chain on one image
-  check_fusion.py        is EyeGaze head- or camera-relative? scored against ground truth
-  verify_backends.py     CPU vs NPU, per model, identical inputs
-  bench.py               per-stage and pipeline timings
-  spill_probe.py         VTCM spill per model
-  export_trimmed.py      re-export EyeGaze without its unused heatmaps output
-  bench_trim.py          what dropping that output saves
-  sched_cost.py          what skipping the detector costs
-  state_timeline.py      attention state and per-frame angles over a clip
-  eval_mpiigaze.py       accuracy and the calibration test
-  stage_videos.py        per-stage videos and stills (stage_render.py lays them out)
-  pipeline_strip.py      the four-stage overview image
-  hero_pipeline.py       the four stages as one 4:3 clip
-  doc_figures.py         the scheduling and calibration charts
-  error_cone.py          an angular error drawn at a viewing distance
-  render_diagrams.py     the mermaid diagrams as PNG
-  debug_crops.py, compare_landmarks.py, sweep_crop.py    development diagnostics
-results/                 measurements and the annotated demo videos
+  gaze_common.py        models, decoding, eye patches, angles
+  attention.py          the application
+  run_live.sh           run it on the board's own monitor
+  stop_live.sh          stop it cleanly, video intact
+  fetch_3dmm_basis.py   download the landmark basis arrays
+  inspect_models.py     each model's input and output tensors
+  check_chain.py        the whole chain on one image
+  check_fusion.py       head- or camera-relative? ground truth
+  verify_backends.py    CPU vs NPU per model, same inputs
+  bench.py              per-stage and pipeline timings
+  spill_probe.py        VTCM spill per model
+  export_trimmed.py     EyeGaze without its heatmaps output
+  bench_trim.py         what dropping that output saves
+  sched_cost.py         what skipping the detector costs
+  state_timeline.py     states and per-frame angles for a clip
+  eval_mpiigaze.py      accuracy and the calibration test
+  stage_videos.py       per-stage videos and stills
+  stage_render.py       their shared layout
+  pipeline_strip.py     the four-stage overview image
+  hero_pipeline.py      the four stages as one 4:3 clip
+  doc_figures.py        scheduling and calibration charts
+  error_cone.py         angular error at a viewing distance
+  render_doc_assets.py  diagrams, tables, this tree as PNG
+  debug_crops.py        diagnostic: landmarks, eye patches
+  compare_landmarks.py  diagnostic: eye positions, two models
+  sweep_crop.py         diagnostic: eye-patch width sweep
 ```
 
 ## Troubleshooting

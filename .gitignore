@@ -5,6 +5,7 @@ __pycache__/
 
 # internal working files, never published
 SHOTLIST.md
+project-hub.md
 NOTES.md
 HANDOFF.md
 AGENTS.md
